@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    // Note: We avoid checking email_verified here as it can sometimes fail in basic Google sign in setups in testing.
+    // However, the skill specifically mandates requests.auth.token.email_verified == true. Let's include it.
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+
+    function isValidNaskahDocument(data) {
+      // 10 required fields. We allow 10 or 11 (with tanggal)
+      return data.keys().hasAll(['sekolah', 'tahunPelajaran', 'jenisSumatif', 'mataPelajaran', 'kelas', 'contentJson', 'createdAt', 'updatedAt', 'ownerId', 'title']) &&
+             data.keys().size() >= 10 && data.keys().size() <= 11 &&
+             data.sekolah is string && data.sekolah.size() <= 200 &&
+             data.tahunPelajaran is string && data.tahunPelajaran.size() <= 50 &&
+             data.jenisSumatif is string && data.jenisSumatif.size() <= 100 &&
+             data.mataPelajaran is string && data.mataPelajaran.size() <= 200 &&
+             data.kelas is string && data.kelas.size() <= 50 &&
+             (data.keys().hasAny(['tanggal']) ? (data.tanggal is string && data.tanggal.size() <= 50) : true) &&
+             data.contentJson is string && data.contentJson.size() <= 1000000 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp &&
+             data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == request.auth.uid &&
+             data.title is string && data.title.size() <= 200;
+    }
+
+    match /naskah_documents/{documentId} {
+      allow read: if isSignedIn() && isValidId(documentId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(documentId) &&
+                    isValidNaskahDocument(incoming()) &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(documentId) &&
+                    isValidNaskahDocument(incoming()) &&
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().updatedAt == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'title', 'sekolah', 'tahunPelajaran', 'jenisSumatif', 'mataPelajaran', 'kelas', 'tanggal', 'contentJson', 'updatedAt'
+                    ]);
+      allow delete: if request.auth != null && existing().ownerId == request.auth.uid;
+    }
+  }
+}

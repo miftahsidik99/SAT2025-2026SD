@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "NaskahDocument": {
+      "title": "Naskah Document",
+      "description": "Generated assessment documents",
+      "type": "object",
+      "properties": {
+        "sekolah": { "type": "string" },
+        "tahunPelajaran": { "type": "string" },
+        "jenisSumatif": { "type": "string" },
+        "mataPelajaran": { "type": "string" },
+        "kelas": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "contentJson": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "required": ["sekolah", "tahunPelajaran", "jenisSumatif", "mataPelajaran", "kelas", "contentJson", "createdAt", "updatedAt", "ownerId", "title"]
+    }
+  },
+  "firestore": {
+    "/naskah_documents/{documentId}": {
+      "schema": "NaskahDocument",
+      "description": "Stores user generated assessment documents"
+    }
+  }
+}
