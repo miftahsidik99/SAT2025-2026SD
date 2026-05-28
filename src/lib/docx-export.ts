@@ -2,14 +2,40 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, Ta
 import { saveAs } from 'file-saver';
 import { GeneratedContent, NaskahDocument } from '../types';
 
-export const exportToDocx = async (docData: NaskahDocument, layout: 'A4' | 'F4', activeTab: 'NASKAH' | 'KISIKISI' | 'RUBRIK') => {
-  if (!docData.contentJson) return;
+export const exportToDocx = async (docData: NaskahDocument, layout: 'A4' | 'F4', activeTab: 'NASKAH' | 'KISIKISI' | 'RUBRIK', onProgress?: (progress: number) => void) => {
+  if (onProgress) onProgress(0);
+  if (!docData.contentJson) {
+    if (onProgress) onProgress(100);
+    return;
+  }
   const content = JSON.parse(docData.contentJson) as GeneratedContent;
 
   const A4_SIZE = { width: convertInchesToTwip(8.27), height: convertInchesToTwip(11.69) };
   const F4_SIZE = { width: convertInchesToTwip(8.5), height: convertInchesToTwip(13) };
   
   const size = layout === 'A4' ? A4_SIZE : F4_SIZE;
+  
+  let totalItems = 0;
+  if (activeTab === 'NASKAH') {
+    totalItems = (content.soalPG?.length || 0) + 
+                 (content.soalPGK?.length || 0) + 
+                 (content.soalUraianSingkat?.length || 0) + 
+                 (content.soalEssay?.length || 0);
+  } else {
+    totalItems = 2; // For kisikisi or rubrik, just to fake some processing steps
+  }
+  
+  if (totalItems === 0) totalItems = 1;
+  let itemsProcessed = 0;
+  
+  const updateProgress = () => {
+    itemsProcessed++;
+    if (onProgress) {
+      // Allocate 80% for processing items, 20% for generating document blob
+      const currentProgress = Math.min(80, Math.round((itemsProcessed / totalItems) * 80));
+      onProgress(currentProgress);
+    }
+  };
 
   // Helper to check valid image prompt
   const isValidImagePrompt = (prompt?: string) => {
@@ -160,7 +186,8 @@ export const exportToDocx = async (docData: NaskahDocument, layout: 'A4' | 'F4',
             docChildren.push(new Paragraph({
               children: [new ImageRun({
                 data: new Uint8Array(imgBuffer) as any,
-                transformation: { width: 300, height: 225 }
+                transformation: { width: 300, height: 225 },
+                type: 'png'
               })],
               spacing: { after: 100 }
             }));
@@ -168,6 +195,7 @@ export const exportToDocx = async (docData: NaskahDocument, layout: 'A4' | 'F4',
         }
         
         docChildren.push(...formatFunc(soal));
+        updateProgress();
       }
     };
 
@@ -175,7 +203,7 @@ export const exportToDocx = async (docData: NaskahDocument, layout: 'A4' | 'F4',
       docChildren.push(new Paragraph({ children: [new TextRun({ text: "A. BERILAH TANDA SILANG (X) PADA HURUF A, B, C, ATAU D PADA JAWABAN YANG BENAR!", bold: true })], spacing: { before: 200, after: 200 } }));
       await processQuestions(content.soalPG, (soal) => [
         new Paragraph({ children: createMixedRuns(soal.pertanyaan, false, `${soal.nomor}. `), spacing: { before: 100 } }),
-        ...(soal.opsi ? soal.opsi.map((o: string, idx: number) => new Paragraph({ children: createMixedRuns(o, false, `   ${String.fromCharCode(65 + idx)}. `) })) : []),
+        ...(soal.opsi ? soal.opsi.map((o: string, idx: number) => new Paragraph({ children: createMixedRuns(o.replace(/^([a-eA-E][.)]\s*)+/i, ''), false, `   ${String.fromCharCode(65 + idx)}. `) })) : []),
         new Paragraph({ text: "", spacing: { after: 200 } })
       ]);
     }
@@ -302,6 +330,13 @@ export const exportToDocx = async (docData: NaskahDocument, layout: 'A4' | 'F4',
     }
   }
 
+  if (activeTab === 'KISIKISI' || activeTab === 'RUBRIK') {
+    updateProgress();
+    updateProgress();
+  }
+
+  if (onProgress) onProgress(90);
+
   const doc = new Document({
     sections: [
       {
@@ -318,4 +353,5 @@ export const exportToDocx = async (docData: NaskahDocument, layout: 'A4' | 'F4',
 
   const blob = await Packer.toBlob(doc);
   saveAs(blob, `${activeTab}_${docData.jenisSumatif}_${docData.mataPelajaran}_Kelas${docData.kelas}.docx`);
+  if (onProgress) onProgress(100);
 };

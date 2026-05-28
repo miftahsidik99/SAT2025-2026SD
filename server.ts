@@ -5,7 +5,7 @@ import apiRouter from './api/index.js';
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = 3000;
 
   // Use the extracted API router
   app.use(apiRouter);

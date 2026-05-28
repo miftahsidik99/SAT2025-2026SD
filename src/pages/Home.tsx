@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFirestore } from '../hooks/useFirestore';
 import { useAuth } from '../hooks/useAuth';
 import { GeneratorConfig } from '../types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Save, RotateCcw } from 'lucide-react';
 
 const MATA_PELAJARAN = [
   'Pendidikan Agama dan Budi Pekerti',
@@ -41,12 +41,28 @@ export default function Home() {
     jmlEssay: 5,
   });
 
+  useEffect(() => {
+    const saved = localStorage.getItem('naskah_generator_config');
+    if (saved) {
+      try {
+        setForm(JSON.parse(saved));
+      } catch (err) {
+        console.error('Failed to parse saved config', err);
+      }
+    }
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     setForm((prev) => ({
       ...prev,
       [name]: type === 'number' ? Number(value) : value,
     }));
+  };
+
+  const handleSaveConfig = () => {
+    localStorage.setItem('naskah_generator_config', JSON.stringify(form));
+    alert('Setingan Formulir Identitas & Struktur berhasil disimpan!');
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -87,11 +103,17 @@ Selalu gunakan konteks yang bermakna bagi SD.`;
         body: JSON.stringify({ prompt }),
       });
 
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseError) {
+        throw new Error('Gagal memproses respons dari server. Server mungkin mengalami timeout atau error internal.');
+      }
+      
       if (!res.ok) {
-        throw new Error('Gagal men-generate naskah. Silakan coba lagi.');
+        throw new Error(data?.error || 'Gagal men-generate naskah. Silakan coba lagi.');
       }
 
-      const data = await res.json();
       const contentJson = JSON.stringify(data.result);
 
       // Simpan ke Firestore
@@ -112,7 +134,11 @@ Selalu gunakan konteks yang bermakna bagi SD.`;
       navigate(`/dokumen/${docId}`);
     } catch (err: any) {
       console.error(err);
-      setErrorPrompt(err.message || 'Terjadi kesalahan sistem.');
+      if (err.message === 'Failed to fetch') {
+        setErrorPrompt('Koneksi terputus. Hal ini mungkin karena batas waktu (timeout) server tercapai atau koneksi internet bermasalah. Pastikan maxDuration Vercel diatur dengan benar dan coba lagi.');
+      } else {
+        setErrorPrompt(err.message || 'Terjadi kesalahan sistem.');
+      }
       setLoading(false);
     }
   };
@@ -127,9 +153,18 @@ Selalu gunakan konteks yang bermakna bagi SD.`;
         <div className="flex gap-3">
           <button
             type="button"
-            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50"
+            className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center justify-center gap-2 transition-colors text-slate-700"
+            onClick={handleSaveConfig}
+            title="Simpan Setingan Langkah 1 dan 2"
+          >
+            <Save className="w-4 h-4" />
+            <span className="hidden sm:inline">Simpan Setingan</span>
+          </button>
+          <button
+            type="button"
+            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 flex items-center justify-center gap-2 transition-colors text-red-600 border-red-100 hover:border-red-200"
             onClick={() => {
-              setForm({
+              const defaultForm = {
                 sekolah: '',
                 tahunPelajaran: '2025/2026',
                 jenisSumatif: 'SAS',
@@ -143,10 +178,13 @@ Selalu gunakan konteks yang bermakna bagi SD.`;
                 jmlPGK: 5,
                 jmlUraianSingkat: 5,
                 jmlEssay: 5,
-              });
+              };
+              setForm(defaultForm);
+              localStorage.removeItem('naskah_generator_config');
             }}
           >
-            Reset Atur Ulang
+            <RotateCcw className="w-4 h-4" />
+            <span className="hidden sm:inline">Reset Atur Ulang</span>
           </button>
         </div>
       </div>

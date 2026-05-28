@@ -1,9 +1,14 @@
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 
-const app = express();
+const app = express.Router();
 
-app.use(express.json({ limit: '10mb' }));
+app.use((req, res, next) => {
+  if (req.body) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
 
 let ai: GoogleGenAI | null = null;
 if (process.env.GEMINI_API_KEY) {
@@ -18,15 +23,18 @@ if (process.env.GEMINI_API_KEY) {
 }
 
 app.post('/api/generate-naskah', async (req, res) => {
+  console.log('Received generate-naskah request');
   if (!ai) {
+    console.error('GEMINI_API_KEY is not configured');
     return res.status(500).json({ error: 'GEMINI_API_KEY is not configured.' });
   }
 
   try {
     const { prompt } = req.body;
+    console.log('Generating content with Gemini...');
     
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -44,9 +52,12 @@ IMPORTANT: If the subject is Islamic Religious Education (Pendidikan Agama Islam
     }
 
     res.status(200).json({ result: JSON.parse(text) });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating AI content:', error);
-    res.status(500).json({ error: 'Failed to generate content.' });
+    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('Quota exceeded') || error?.status === 'RESOURCE_EXHAUSTED') {
+      return res.status(429).json({ error: 'Limit penggunaan AI gratis Anda telah habis untuk saat ini. Silakan coba lagi dalam beberapa menit atau periksa kuota Anda.' });
+    }
+    res.status(500).json({ error: error?.message || 'Failed to generate content.' });
   }
 });
 

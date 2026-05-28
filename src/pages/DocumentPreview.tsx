@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useFirestore } from '../hooks/useFirestore';
 import { useAuth } from '../hooks/useAuth';
 import { NaskahDocument, GeneratedContent } from '../types';
-import { ArrowLeft, Download, FileText, Loader2, Printer, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Loader2, Image as ImageIcon } from 'lucide-react';
 import { exportToDocx } from '../lib/docx-export';
 
 // Helper function to validate if a prompt is a legitimate image request
@@ -81,23 +81,24 @@ export default function DocumentPreview() {
   }, [user?.uid, id, getDocument]);
 
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   const handleExport = async () => {
     if (docData) {
       try {
         setExporting(true);
-        await exportToDocx(docData, layout, activeTab);
+        setExportProgress(0);
+        await exportToDocx(docData, layout, activeTab, (progress) => {
+          setExportProgress(progress);
+        });
       } catch (error: any) {
         console.error('Export failed:', error);
         alert('Gagal mengunduh dokumen. Silakan coba lagi.');
       } finally {
         setExporting(false);
+        setExportProgress(0);
       }
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   if (loading || !docData || !content) {
@@ -135,11 +136,12 @@ export default function DocumentPreview() {
                 <option value="A4">A4 Portrait</option>
                 <option value="F4">F4 / Folio Portrait</option>
               </select>
-              <button onClick={handleExport} disabled={exporting} className={`flex-1 md:flex-none flex items-center justify-center gap-2 ${exporting ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200'} text-white px-5 py-2 rounded-xl font-bold transition-colors`}>
-                {exporting ? <><Loader2 className="w-4 h-4 animate-spin" /> Memproses...</> : <><Download className="w-4 h-4" /> Unduh Word</>}
-              </button>
-              <button onClick={handlePrint} className="p-2.5 border border-slate-300 rounded-xl hover:bg-slate-50 text-slate-700 transition-colors shadow-sm" title="Print Jendela Ini">
-                <Printer className="w-5 h-5" />
+              <button 
+                onClick={handleExport} 
+                disabled={exporting} 
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 ${exporting ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-200'} text-white px-5 py-2 rounded-xl font-bold transition-colors w-[180px]`}
+              >
+                {exporting ? <><Loader2 className="w-4 h-4 animate-spin" /> {exportProgress}% Memproses</> : <><Download className="w-4 h-4" /> Unduh Word</>}
               </button>
            </div>
         </div>
@@ -196,7 +198,11 @@ export default function DocumentPreview() {
                         <div>
                           <p className="mb-2 whitespace-pre-wrap" dir="auto">{soal.pertanyaan}</p>
                           <ol className="list-[lower-alpha] list-inside space-y-1 ml-2">
-                            {soal.opsi?.map((opt, i) => <li key={`opt-${i}`} dir="auto">{opt}</li>)}
+                            {soal.opsi?.map((opt, i) => (
+                              <li key={`opt-${i}`} dir="auto">
+                                {opt.replace(/^([a-eA-E][.)]\s*)+/i, '')}
+                              </li>
+                            ))}
                           </ol>
                         </div>
                       </div>
